@@ -9,35 +9,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '11'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install SCons
         run: pip install "scons==4.7.0"
-      - name: Install NDK r23c (Godot 4.2 era)
+      - name: Install NDK r23c
         id: ndk
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r23c
-      - name: Compile GDExtension (android, template_release, arm64)
+      - name: Diagnose + compile
         env:
           ANDROID_NDK_ROOT: ${{ steps.ndk.outputs.ndk-path }}
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
-          echo "NDK: $ANDROID_NDK_ROOT"
-          scons target=template_release platform=android arch=arm64 verbose=yes || echo "SCONS_FAILED rc=$?"
-          echo "=== bin output ==="; ls -l project/addons/luaAPI/bin/ || true
+          echo "NDK=$ANDROID_NDK_ROOT"
+          BIN="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "--- clang present? ---"; ls "$BIN" | grep -i '^clang' | head || echo "NO CLANG DIR"
+          "$BIN/clang" --version 2>&1 | head -2 || echo "CLANG RUN FAILED"
+          echo "--- scons ---"; set +e
+          scons platform=android arch=arm64 target=template_release verbose=yes 2>&1 | tail -50
+          echo "SCONS_EXIT=${PIPESTATUS[0]}"
+          echo "--- bin ---"; ls -l project/addons/luaAPI/bin/ 2>&1 || true
       - name: Collect .so
         if: always()
         run: |
-          mkdir -p out
-          find . -path "*addons/luaAPI/bin/*" -name "*.so" -exec cp {} out/ \; 2>/dev/null || true
-          find . -name "libluaapi*android*.so" -exec cp {} out/ \; 2>/dev/null || true
-          echo "--- collected ---"; ls -la out || true
+          mkdir -p out; find . -name "libluaapi*android*.so" -exec cp {} out/ \; 2>/dev/null || true; ls -la out || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
