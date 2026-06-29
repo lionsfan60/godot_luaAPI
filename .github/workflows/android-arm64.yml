@@ -15,14 +15,21 @@ jobs:
           java-version: '11'
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
       - name: Install SCons
-        run: pip install scons
+        run: pip install "scons==4.7.0"
+      - name: Install NDK r23c (Godot 4.2 era)
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r23c
       - name: Compile GDExtension (android, template_release, arm64)
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
-          export ANDROID_NDK_ROOT="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
           echo "NDK: $ANDROID_NDK_ROOT"
-          scons target=template_release platform=android arch=arm64
+          scons target=template_release platform=android arch=arm64 verbose=yes || echo "SCONS_FAILED rc=$?"
           echo "=== bin output ==="; ls -l project/addons/luaAPI/bin/ || true
       - name: Collect .so
         if: always()
